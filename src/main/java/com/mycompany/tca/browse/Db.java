@@ -12,7 +12,6 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,17 +51,17 @@ public class Db {
 		+ "    element.description AS threshold_name\n"
 		+ "FROM\n"
 		+ "    metric\n"
-		+ "LEFT JOIN\n"
+		+ "INNER JOIN\n"
 		+ "    threshold_type\n"
 		+ "ON\n"
 		+ "    (\n"
 		+ "        metric.threshold_type = threshold_type.id)\n"
-		+ "LEFT JOIN\n"
+		+ "INNER JOIN\n"
 		+ "    element\n"
 		+ "ON\n"
 		+ "    (\n"
 		+ "        metric.metric = element.id)\n"
-		+ "LEFT JOIN\n"
+		+ "INNER JOIN\n"
 		+ "    element_subtype\n"
 		+ "ON\n"
 		+ "    (\n"
