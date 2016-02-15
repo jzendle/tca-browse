@@ -20,7 +20,9 @@ import java.util.Map;
  *
  * @author zendle.joe
  */
-public class Db {
+public class Db implements AutoCloseable {
+
+	Connection conn = null;
 
 	static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
 	// static final String JDBC_DRIVER = "com.vertica.jdbc.Driver";
@@ -37,7 +39,7 @@ public class Db {
 		= "select guid from resource where circuit = ?  and  virtual_circuit = ? and bclli = ? ";
 
 	static final String SELECT_TCA_INSTANCES
-		= "select * from tca_instance where resource = ? ";
+		= " select metric as guid, qos, owner, created_on, modified_by, modified_on from tca_instance where resource = ?";
 
 	static final String SELECT_METRIC
 		= "SELECT\n"
@@ -46,7 +48,7 @@ public class Db {
 		+ "    element_subtype.name AS level,\n"
 		+ "    metric.threshold,\n"
 		+ "    threshold_type.operator,\n"
-		+ "    element.name,\n"
+		+ "    element.name as elem_name,\n"
 		+ "    element.info        AS units,\n"
 		+ "    element.description AS threshold_name\n"
 		+ "FROM\n"
@@ -104,35 +106,41 @@ public class Db {
 		+ "        alert_action_parameter.action_parameter = action_parameter.id)"
 		+ "        where action.alert = ? ";
 
+	public Db() throws ClassNotFoundException, SQLException {
+		conn = createConnection();
+	}
+
+	@Override
+	public void close() throws Exception {
+		System.out.println("closing.");
+		if (conn != null) {
+			conn.close();
+		}
+	}
+
 	public List getResources(String circuit, String vcircuit, String clli) throws SQLException, ClassNotFoundException {
 
-		try (Connection conn = Db.createConnection()) {
-			return processQuery(conn,SELECT_RESOURCES,circuit,vcircuit,clli);
-		}
+		return processQuery(conn, SELECT_RESOURCES, circuit, vcircuit, clli);
 	}
+
 	public List getTCAs(String guid) throws SQLException, ClassNotFoundException {
 
-		try (Connection conn = Db.createConnection()) {
-			return processQuery(conn,SELECT_TCA_INSTANCES, guid);
-		}
+		return processQuery(conn, SELECT_TCA_INSTANCES, guid);
 	}
+
 	public List getMetrics(String metricGuid) throws SQLException, ClassNotFoundException {
 
-		try (Connection conn = Db.createConnection()) {
-			return processQuery(conn,SELECT_METRIC, metricGuid);
-		}
+		return processQuery(conn, SELECT_METRIC, metricGuid);
 	}
+
 	public List getAlerts(String alertGuid) throws SQLException, ClassNotFoundException {
 
-		try (Connection conn = Db.createConnection()) {
-			return processQuery(conn,SELECT_ALERT, alertGuid);
-		}
+		return processQuery(conn, SELECT_ALERT, alertGuid);
 	}
+
 	public List getActions(String actionGuid) throws SQLException, ClassNotFoundException {
 
-		try (Connection conn = Db.createConnection()) {
-			return processQuery(conn,SELECT_ACTION, actionGuid);
-		}
+		return processQuery(conn, SELECT_ACTION, actionGuid);
 	}
 
 	public List processQuery(Connection conn, String sql, Object... args) throws SQLException, ClassNotFoundException {
@@ -164,40 +172,62 @@ public class Db {
 		return list;
 	}
 
-	static Connection createConnection() throws ClassNotFoundException, SQLException {
+	final Connection createConnection() throws ClassNotFoundException, SQLException {
 		Class.forName(JDBC_DRIVER);
 		return DriverManager.getConnection(DB_URL, USER, PASS);
 
 	}
 
-	public static void main(String [] args) throws SQLException, ClassNotFoundException {
-		Db db = new Db();
+	private String getListMapValue(List mapList, int idx, String key) {
+		return (String) ((Map) mapList.get(idx)).get(key);
+	}
 
-		Connection conn = Db.createConnection();
+	public static void main(String[] args) throws Exception {
 
-		List ret = db.getResources("25/KFFN/000000/DEMO","","");
-		System.out.println("ret: "+ ret);
-		String guid = (String) ((Map) ret.get(0)).get("guid");
+		try (Db db = new Db()) {
 
-		ret = db.getTCAs(guid);
-		System.out.println("ret: "+ ret);
-		guid = (String) ((Map) ret.get(0)).get("metric");
-		
-		System.out.println("metric guid: "+ guid);
-		ret = db.getMetrics(guid);
-		System.out.println("ret: "+ ret);
+			int indent = 0;
 
-		guid = (String) ((Map) ret.get(0)).get("guid");
-		System.out.println("alert guid: "+ guid);
-		ret = db.getAlerts(guid);
-		System.out.println("ret: "+ ret);
+			List ret = db.getResources("25/KFFN/000000/DEMO", "", "");
+			String guid = db.getListMapValue(ret, 0, "guid");
 
-		guid = (String) ((Map) ret.get(0)).get("guid");
-		System.out.println("action guid: "+ guid);
-		ret = db.getActions(guid);
-		System.out.println("ret: "+ ret);
+			ret = db.getTCAs(guid);
+			for (int sz = 0; sz < ret.size(); sz++) {
+				Map map = (Map) ret.get(sz);
+				guid = (String) map.get("guid");
+				System.out.println("TCA: " + map.get("owner"));
 
+			}
+			ret = db.getMetrics(guid);
+			for (int sz = 0; sz < ret.size(); sz++) {
+				Map map = (Map) ret.get(sz);
+				guid = (String) map.get("guid");
+				System.out.println("  Metric: "
+					+ map.get("elem_name") + " - "
+					+ map.get("level") + ": "
+					+ map.get("operator") + " "
+					+ map.get("threshold")
+					+ map.get("units"));
 
+			}
+			ret = db.getAlerts(guid);
+			for (int sz = 0; sz < ret.size(); sz++) {
+				Map map = (Map) ret.get(sz);
+				guid = (String) map.get("guid");
+				System.out.println("    Alert: period "
+					+ map.get("period") + " , timezone "
+					+ map.get("timezone"));
 
+			}
+			ret = db.getActions(guid);
+			for (int sz = 0; sz < ret.size(); sz++) {
+				Map map = (Map) ret.get(sz);
+				System.out.println("      Action: "
+					+ map.get("name") + " - "
+					+ map.get("value"));
+
+			}
+
+		}
 	}
 }
